@@ -25,4 +25,4 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
-      - run: cargo test --locked --test contracts postgres_contract -- --ignored
+      - run: cargo test --locked -- --ignored --test-threads=1

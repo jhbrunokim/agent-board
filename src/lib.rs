@@ -1,3 +1,5 @@
+mod projections;
+pub mod vault;
 mod workflows;
 use axum::{
     Json, Router,
@@ -298,6 +300,7 @@ pub fn router(s: Store) -> Router {
         .route("/api/v1/threads/{id}/messages", post(reply).get(read))
         .route("/api/v1/events", get(events))
         .merge(workflows::routes())
+        .merge(projections::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
         .route("/ready", get(ready))
         .route("/health", get(|| async { Json(json!({"status":"up"})) }))

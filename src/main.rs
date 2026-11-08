@@ -33,6 +33,14 @@ enum Command {
         #[arg(long, default_value = "127.0.0.1:7431")]
         bind: String,
     },
+    Export {
+        #[arg(long, default_value = "http://127.0.0.1:7431")]
+        url: String,
+        #[arg(long, env = "BOARD_TOKEN", hide_env_values = true)]
+        token: String,
+        #[arg(long)]
+        vault: std::path::PathBuf,
+    },
     Request {
         #[arg(long, default_value = "http://127.0.0.1:7431")]
         url: String,
@@ -90,6 +98,10 @@ async fn main() -> anyhow::Result<()> {
                     shutdown().await;
                 })
                 .await?;
+        }
+        Command::Export { url, token, vault } => {
+            let written = agent_board::vault::pull(&url, &token, &vault).await?;
+            println!("{}", serde_json::json!({"written":written}));
         }
         Command::Request {
             url,

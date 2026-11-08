@@ -56,13 +56,18 @@ async fn upgrades_v1_without_losing_messages_or_tokens() {
         .execute(&db)
         .await
         .unwrap();
-    let (project, _) = store.provision("existing", "owner").await.unwrap();
-    sqlx::query("INSERT INTO threads(id,project_id,title) VALUES ('old-thread',?,'Existing')")
-        .bind(&project)
+    let project = "legacy-project";
+    sqlx::query("INSERT INTO projects(id,name) VALUES ('legacy-project','existing')")
         .execute(&db)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO messages(id,project_id,thread_id,sender,seq,payload) VALUES ('old-message',?,'old-thread','owner',1,'{}')").bind(&project).execute(&db).await.unwrap();
+    sqlx::query("INSERT INTO tokens(hash,project_id,principal) VALUES ('legacy-hash','legacy-project','owner')").execute(&db).await.unwrap();
+    sqlx::query("INSERT INTO threads(id,project_id,title) VALUES ('old-thread',?,'Existing')")
+        .bind(project)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO messages(id,project_id,thread_id,sender,seq,payload) VALUES ('old-message',?,'old-thread','owner',1,'{}')").bind(project).execute(&db).await.unwrap();
     assert!(store.check_schema().await.is_err());
     store.migrate().await.unwrap();
     store.check_schema().await.unwrap();

@@ -1,3 +1,5 @@
+mod access;
+pub use access::Role;
 mod projections;
 pub mod vault;
 mod workflows;
@@ -107,7 +109,7 @@ impl Store {
                 .fetch_one(&mut *tx)
                 .await?
                 .try_get("version")?;
-        anyhow::ensure!(version <= 2, "database schema is newer than this server");
+        anyhow::ensure!(version <= 3, "database schema is newer than this server");
         for s in [
             "CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY)",
             "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, head BIGINT NOT NULL DEFAULT 0)",
@@ -127,6 +129,17 @@ impl Store {
                 .execute(&mut *tx)
                 .await?;
         }
+        if version < 3 {
+            sqlx::query("ALTER TABLE tokens ADD COLUMN role TEXT NOT NULL DEFAULT 'reviewer'")
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("ALTER TABLE tokens ADD COLUMN revoked BIGINT NOT NULL DEFAULT 0")
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("INSERT INTO schema_version(version) VALUES (3)")
+                .execute(&mut *tx)
+                .await?;
+        }
         tx.commit().await?;
         Ok(())
     }
@@ -137,7 +150,7 @@ impl Store {
                 .await?
                 .try_get("version")?;
         anyhow::ensure!(
-            version == 2,
+            version == 3,
             "schema version mismatch; run migrate before starting this server"
         );
         Ok(())
@@ -155,25 +168,19 @@ impl Store {
             .bind(name)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(&self.sql("INSERT INTO tokens(hash,project_id,principal) VALUES (?,?,?)"))
-            .bind(hash(&token))
-            .bind(&id)
-            .bind(principal)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            &self.sql("INSERT INTO tokens(hash,project_id,principal,role) VALUES (?,?,?,'admin')"),
+        )
+        .bind(hash(&token))
+        .bind(&id)
+        .bind(principal)
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok((id, token))
     }
     pub async fn grant(&self, project: &str, principal: &str) -> anyhow::Result<String> {
-        anyhow::ensure!(!principal.trim().is_empty(), "principal required");
-        let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-        sqlx::query(&self.sql("INSERT INTO tokens(hash,project_id,principal) VALUES (?,?,?)"))
-            .bind(hash(&token))
-            .bind(project)
-            .bind(principal)
-            .execute(&self.pool)
-            .await?;
-        Ok(token)
+        self.grant_role(project, principal, Role::Contributor).await
     }
     async fn authenticate(&self, headers: &HeaderMap) -> Result<Identity> {
         let token = headers
@@ -181,7 +188,10 @@ impl Store {
             .and_then(|h| h.to_str().ok())
             .and_then(|h| h.strip_prefix("Bearer "))
             .ok_or(Error(StatusCode::UNAUTHORIZED, "unauthorized"))?;
-        let row = sqlx::query(&self.sql("SELECT project_id,principal FROM tokens WHERE hash=?"))
+        let row =
+            sqlx::query(&self.sql(
+                "SELECT project_id,principal,role,hash FROM tokens WHERE hash=? AND revoked=0",
+            ))
             .bind(hash(token))
             .fetch_optional(&self.pool)
             .await?
@@ -189,6 +199,8 @@ impl Store {
         Ok(Identity {
             project: row.try_get("project_id")?,
             principal: row.try_get("principal")?,
+            role: access::parse_role(&row.try_get::<String, _>("role")?)?,
+            token_id: row.try_get("hash")?,
         })
     }
     async fn write(
@@ -221,6 +233,7 @@ impl Store {
                 .fetch_one(&mut *tx)
                 .await?
                 .try_get("head")?;
+        self.active(who, &mut tx).await?;
         let prior=sqlx::query(&self.sql("SELECT hash,response FROM dedup WHERE project_id=? AND principal=? AND operation=? AND key=?")).bind(&who.project).bind(&who.principal).bind(&operation).bind(key).fetch_optional(&mut *tx).await?;
         if let Some(row) = prior {
             tx.rollback().await?;
@@ -282,6 +295,8 @@ fn hash(s: &str) -> String {
 struct Identity {
     project: String,
     principal: String,
+    role: Role,
+    token_id: String,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -291,6 +306,9 @@ pub struct Input {
 }
 async fn auth(State(s): State<Store>, mut request: Request, next: Next) -> Result<Response> {
     let who = s.authenticate(request.headers()).await?;
+    if !access::allowed(&who, request.method().as_str(), request.uri().path()) {
+        return Err(Error(StatusCode::FORBIDDEN, "permission_denied"));
+    }
     request.extensions_mut().insert(who);
     Ok(next.run(request).await)
 }
@@ -302,6 +320,7 @@ pub fn router(s: Store) -> Router {
         .route("/api/v1/capabilities", get(capabilities))
         .merge(workflows::routes())
         .merge(projections::routes())
+        .merge(access::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
         .route("/ready", get(ready))
         .route("/health", get(|| async { Json(json!({"status":"up"})) }))
@@ -422,11 +441,11 @@ async fn ready(State(s): State<Store>) -> Result<Json<Value>> {
     s.check_schema()
         .await
         .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "schema_not_ready"))?;
-    Ok(Json(json!({"status":"ready","schema_version":2})))
+    Ok(Json(json!({"status":"ready","schema_version":3})))
 }
 
 async fn capabilities(axum::Extension(who): axum::Extension<Identity>) -> Json<Value> {
     Json(
-        json!({"api_version":1,"schema_version":2,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","search","context","vault_export"],"instructions":"agent-board instructions","scope":"project-wide read/write; no fine-grained roles yet"}),
+        json!({"api_version":1,"schema_version":3,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","search","context","vault_export"],"instructions":"agent-board instructions","role":who.role,"scope":"project"}),
     )
 }

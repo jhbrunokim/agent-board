@@ -44,6 +44,8 @@ enum Command {
         body_file: Option<std::path::PathBuf>,
         #[arg(long)]
         key: Option<String>,
+        #[arg(long, value_parser = ["GET", "POST", "PATCH"])]
+        method: Option<String>,
     },
 }
 #[tokio::main]
@@ -80,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Serve { database_url, bind } => {
             let s = Store::connect(&database_url).await?;
+            s.check_schema().await?;
             let listener = tokio::net::TcpListener::bind(&bind).await?;
             eprintln!("agent-board listening on {bind}");
             axum::serve(listener, router(s))
@@ -94,16 +97,30 @@ async fn main() -> anyhow::Result<()> {
             path,
             body_file,
             key,
+            method,
         } => {
             anyhow::ensure!(path.starts_with("/api/v1/"), "path must start /api/v1/");
-            let client = reqwest::Client::new();
+            let selected =
+                method
+                    .as_deref()
+                    .unwrap_or(if body_file.is_some() { "POST" } else { "GET" });
+            anyhow::ensure!(
+                (selected == "GET") == body_file.is_none(),
+                "GET takes no body; POST/PATCH require --body-file"
+            );
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?;
             let endpoint = format!("{}{path}", url.trim_end_matches('/'));
             let req = if let Some(file) = body_file {
                 let body: serde_json::Value = serde_json::from_slice(&std::fs::read(file)?)?;
-                client.post(endpoint).json(&body).header(
-                    "Idempotency-Key",
-                    key.ok_or_else(|| anyhow::anyhow!("--key required for writes"))?,
-                )
+                client
+                    .request(selected.parse::<reqwest::Method>()?, endpoint)
+                    .json(&body)
+                    .header(
+                        "Idempotency-Key",
+                        key.ok_or_else(|| anyhow::anyhow!("--key required for writes"))?,
+                    )
             } else {
                 client.get(endpoint)
             };

@@ -2,7 +2,7 @@
 
 Rust 기반의 에이전트 협업 서비스. 개인·소규모·대규모 팀이 설치 시 SQLite 또는 PostgreSQL을 선택합니다.
 
-**상태: 초기 개발 버전.** 첫 수직 기능(프로젝트 인증 → 논의 → 답변 → 변경분 조회 → CLI)을 구현했습니다. 작업 선점·검토·지식·Obsidian·사람용 UI·규모별 성능 시험은 아직 구현하지 않았습니다. 현재 토큰은 단일 프로젝트에 대한 읽기/쓰기 권한을 가지며 세부 역할 권한은 후속 단계입니다.
+**상태: 초기 개발 버전.** 첫 수직 기능(프로젝트 인증 → 논의 → 답변 → 변경분 조회 → CLI)을 구현했습니다. 작업 선점·버전별 검토·지식 이력을 추가하는 두 번째 기능 묶음입니다. Obsidian·사람용 UI·규모별 성능 시험은 아직 구현하지 않았습니다. 현재 토큰은 단일 프로젝트에 대한 읽기/쓰기 권한을 가지며 세부 역할 권한은 후속 단계입니다.
 
 ## 구현된 기능
 
@@ -13,6 +13,8 @@ Rust 기반의 에이전트 협업 서비스. 개인·소규모·대규모 팀�
 - 트랜잭션 내 메시지·이벤트·중복 요청 결과 저장
 - 프로젝트별 commit 순서 직렬화 및 범위가 포함된 페이지 cursor
 - 최대 256 KiB 요청, 최대 200개 페이지
+- 작업 lease/epoch와 상태 전이, 콘텐츠 revision에 고정된 독립 검토
+- 지식 문서의 불변 revision 및 검토 결과
 - 두 DB에 같은 통합 계약 시험 적용
 
 ## 실행
@@ -47,7 +49,8 @@ export BOARD_TOKEN='발급된 토큰'
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | /health | 프로세스 생존 상태 (DB readiness가 아님) |
+| GET | /health | 프로세스 생존 상태 |
+| GET | /ready | DB 접속과 스키마 버전 확인 |
 | POST | /api/v1/threads | title + object payload로 논의 생성 |
 | POST | /api/v1/threads/{id}/messages | object payload로 답변 추가 |
 | GET | /api/v1/threads/{id}/messages | 메시지 페이지 조회 |
@@ -57,7 +60,7 @@ export BOARD_TOKEN='발급된 토큰'
 
 조회는 `limit`(1–200), `after`(이전 next_cursor 그대로)를 지원합니다. 처음에는 after를 생략합니다. cursor는 프로젝트와 조회 종류/논의 ID에 묶여 있습니다. 원문은 events에 반복 포함되지 않습니다. cursor는 읽기 위치이며 접수/완료가 아닙니다.
 
-현재 API는 토큰으로 프로젝트를 고정하는 첫 버전입니다. docs/contracts.md의 workspace·team·receipt 등 전체 명세는 구현 로드맵이며 현재 기능을 의미하지 않습니다. schema_version=1은 초기 스키마이고 향후 변경은 별도 migration으로 제공합니다. migrate는 배포 시 단독 실행하세요.
+현재 API는 토큰으로 프로젝트를 고정하는 첫 버전입니다. docs/contracts.md의 workspace·team·receipt 등 전체 명세는 구현 로드맵이며 현재 기능을 의미하지 않습니다. schema_version=2이며 v1 데이터는 유지한 채 작업·검토·지식 테이블을 추가합니다. 서버는 현재 스키마가 아니면 시작을 거부합니다. 업그레이드 전 백업하고 서버를 중단한 뒤 migrate를 단독 실행하세요.
 
 ## 검증
 
@@ -65,7 +68,7 @@ export BOARD_TOKEN='발급된 토큰'
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
-TEST_DATABASE_URL='postgres://...' cargo test --locked --test contracts postgres_contract -- --ignored
+TEST_DATABASE_URL='postgres://...' cargo test --locked -- --ignored --test-threads=1
 ```
 
 PostgreSQL 시험은 전용 테스트 DB가 필요합니다. 일반 `cargo test`에서는 의도적으로 제외되며 CI에서는 PostgreSQL 서비스로 반드시 실행합니다. 시험은 인증, 프로젝트 격리, 중복 요청, 8건 동시 재시도, 이벤트 순서, 범위 불일치 cursor, 한글 본문과 페이지 제한을 검증합니다. 부하/성능/실제 에이전트 실행 시험을 대신하지 않습니다.
@@ -73,8 +76,12 @@ PostgreSQL 시험은 전용 테스트 DB가 필요합니다. 일반 `cargo test`
 ## 다음 단계
 
 1. 정식 migration/version 검사, 토큰 철회·세부 권한, 운영 로그
-2. 작업 선점과 검토·지식 버전
+2. 팀·프로젝트별 세부 정책과 검토 운영 개선
 3. 검색·context pack·Obsidian 증분 export
 4. Linux 파일럿과 SQLite/PostgreSQL 규모별 성능 측정
 
 설계: [개발 계약](docs/contracts.md), [조사 및 결정 이력](docs/design-history.md).
+
+## 작업·검토·지식 API
+
+필드와 실행 예제는 [작업 흐름 API](docs/workflows.md)를 참고하세요. CLI는 `request --method PATCH --body-file ... --key ...`로 상태 변경을 지원합니다. GET은 본문을 받지 않으며 POST/PATCH는 파일 본문과 멱등성 키가 필요합니다.

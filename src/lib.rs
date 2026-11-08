@@ -1,3 +1,4 @@
+mod workflows;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Path, Query, Request, State},
@@ -96,6 +97,15 @@ impl Store {
     }
     pub async fn migrate(&self) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
+        sqlx::query("CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY)")
+            .execute(&mut *tx)
+            .await?;
+        let version: i64 =
+            sqlx::query("SELECT COALESCE(MAX(version),0) AS version FROM schema_version")
+                .fetch_one(&mut *tx)
+                .await?
+                .try_get("version")?;
+        anyhow::ensure!(version <= 2, "database schema is newer than this server");
         for s in [
             "CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY)",
             "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, head BIGINT NOT NULL DEFAULT 0)",
@@ -109,7 +119,25 @@ impl Store {
         ] {
             sqlx::query(s).execute(&mut *tx).await?;
         }
+        if version < 2 {
+            workflows::migrate(&mut tx).await?;
+            sqlx::query("INSERT INTO schema_version(version) VALUES (2)")
+                .execute(&mut *tx)
+                .await?;
+        }
         tx.commit().await?;
+        Ok(())
+    }
+    pub async fn check_schema(&self) -> anyhow::Result<()> {
+        let version: i64 =
+            sqlx::query("SELECT COALESCE(MAX(version),0) AS version FROM schema_version")
+                .fetch_one(&self.pool)
+                .await?
+                .try_get("version")?;
+        anyhow::ensure!(
+            version == 2,
+            "schema version mismatch; run migrate before starting this server"
+        );
         Ok(())
     }
     pub async fn provision(&self, name: &str, principal: &str) -> anyhow::Result<(String, String)> {
@@ -269,7 +297,9 @@ pub fn router(s: Store) -> Router {
         .route("/api/v1/threads", post(create))
         .route("/api/v1/threads/{id}/messages", post(reply).get(read))
         .route("/api/v1/events", get(events))
+        .merge(workflows::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
+        .route("/ready", get(ready))
         .route("/health", get(|| async { Json(json!({"status":"up"})) }))
         .layer(DefaultBodyLimit::max(256 * 1024))
         .with_state(s)
@@ -382,4 +412,11 @@ fn parse_cursor(value: Option<&str>, scope: &str) -> Result<i64> {
         return Err(invalid());
     }
     Ok(number)
+}
+
+async fn ready(State(s): State<Store>) -> Result<Json<Value>> {
+    s.check_schema()
+        .await
+        .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "schema_not_ready"))?;
+    Ok(Json(json!({"status":"ready","schema_version":2})))
 }

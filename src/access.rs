@@ -72,11 +72,24 @@ impl Store {
         Ok(json!({"items":items}))
     }
     pub async fn revoke_token(&self, project: &str, id: &str) -> anyhow::Result<bool> {
+        self.revoke_inner(project, id, None)
+            .await
+            .map_err(|_| anyhow::anyhow!("token revoke failed"))
+    }
+    async fn revoke_inner(
+        &self,
+        project: &str,
+        id: &str,
+        actor: Option<&Identity>,
+    ) -> Result<bool> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(&self.sql("UPDATE projects SET head=head WHERE id=?"))
             .bind(project)
             .execute(&mut *tx)
             .await?;
+        if let Some(who) = actor {
+            self.active(who, &mut tx).await?;
+        }
         let n = sqlx::query(&self.sql("UPDATE tokens SET revoked=1 WHERE project_id=? AND hash=?"))
             .bind(project)
             .bind(id)
@@ -125,12 +138,57 @@ async fn revoke(
     axum::Extension(who): axum::Extension<Identity>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    let found = s
-        .revoke_token(&who.project, &id)
-        .await
-        .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable"))?;
+    let found = s.revoke_inner(&who.project, &id, Some(&who)).await?;
     if !found {
         return Err(missing());
     }
     Ok(Json(json!({"revoked":true})))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn stale_authenticated_admin_cannot_revoke() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::connect(&format!(
+            "sqlite://{}?mode=rwc",
+            dir.path().join("race.db").display()
+        ))
+        .await
+        .unwrap();
+        store.migrate().await.unwrap();
+        let (project, token) = store.provision("race", "admin").await.unwrap();
+        let _other = store
+            .grant_role(&project, "other", Role::Admin)
+            .await
+            .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
+        let stale = store.authenticate(&headers).await.unwrap();
+        store.revoke_token(&project, &stale.token_id).await.unwrap();
+        let items = store.list_tokens(&project).await.unwrap();
+        let target = items["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["principal"] == "other")
+            .unwrap()["token_id"]
+            .as_str()
+            .unwrap();
+        assert!(matches!(
+            store.revoke_inner(&project, target, Some(&stale)).await,
+            Err(Error(StatusCode::UNAUTHORIZED, _))
+        ));
+        let list = store.list_tokens(&project).await.unwrap();
+        assert_eq!(
+            list["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| v["principal"] == "other")
+                .unwrap()["revoked"],
+            false
+        );
+    }
 }

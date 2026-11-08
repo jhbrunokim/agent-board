@@ -52,8 +52,13 @@ async fn documents(s: &Store, who: &Identity, o: &Options) -> Result<(Vec<Value>
     let mut out = Vec::new();
     for row in rows.into_iter().take(limit as usize) {
         let key: String = row.try_get("doc_key")?;
-        let body: Value =
+        let mut body: Value =
             serde_json::from_str(&row.try_get::<String, _>("body")?).map_err(|_| invalid())?;
+        if key.starts_with("object-") && body.get("body").is_some() {
+            let id = body["id"].as_str().ok_or_else(invalid)?.to_owned();
+            let revision = body["content_revision"].as_i64().ok_or_else(invalid)?;
+            body["sources"] = json!(sources::list(s, who, &id, revision).await?);
+        }
         out.push(json!({"id":key,"project_id":who.project,"data":body,"cursor":format!("{scope}:{key}")}));
     }
     Ok((out, more))

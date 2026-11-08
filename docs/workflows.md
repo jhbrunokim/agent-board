@@ -28,3 +28,6 @@ subject_kind는 task/knowledge, verdict는 approved/rejected. 지정 reviewer의
 초안은 draft, 독립 approved 판정 시 verified, 수정 시 다시 draft입니다. 버전별 본문을 보존합니다. 검증은 해당 내용의 팀 검토 상태이며 제품 인증을 뜻하지 않습니다. 구조화된 source 레코드·증거 파일·검색·목록 및 Obsidian export는 아직 후속 개발 범위입니다. 현재 근거는 body/comment에 기록합니다.
 
 변경 이벤트는 ID·유형·순서만 제공하며 긴 본문을 반복 전달하지 않습니다. CLI는 PATCH에 `request --method PATCH --path ... --body-file ... --key ...`를 사용합니다.
+
+
+새 knowledge approved verdict는 현재 content_revision의 source가 필요합니다. 먼저 [근거 연결 API](sources.md)로 source를 생성·첨부하고, 첨부가 반환한 새 version/content_revision으로 검토를 요청하세요. 첨부는 draft revision을 만들며 기존 검토를 새 revision에 재사용할 수 없습니다.

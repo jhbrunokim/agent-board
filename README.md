@@ -112,6 +112,7 @@ agent-board export --vault /absolute/path/to/vault
 ## 문서
 
 - [설치와 업그레이드](docs/installation.md)
+- [지식 출처와 근거 연결](docs/sources.md)
 - [토큰과 권한 관리](docs/access.md)
 - [AI 연결 지시문](docs/agent-instructions.md)
 - [API·검색·Obsidian 상세 사용법](docs/api.md)

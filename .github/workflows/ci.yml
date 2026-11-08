@@ -27,4 +27,5 @@ jobs:
       - run: cargo test --locked
       - run: bash -n scripts/install.sh
       - run: scripts/install.sh --prefix "$RUNNER_TEMP/agent-board-install" --binary target/debug/agent-board
+      - run: bash tests/scripts/install-release.sh target/debug/agent-board
       - run: cargo test --locked -- --ignored --test-threads=1

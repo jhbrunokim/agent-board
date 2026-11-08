@@ -1,0 +1,94 @@
+name: Binary release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag matching Cargo.toml, e.g. v0.1.0
+        required: true
+        type: string
+      publish:
+        description: Publish tested assets to the repository release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binary-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release ref and version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="$(awk -F '"' '/^version = "/ {print $2; exit}' Cargo.toml)"
+          test "$RELEASE_TAG" = "v$version"
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            asset: agent-board-linux-x86_64
+          - runner: ubuntu-22.04-arm
+            asset: agent-board-linux-aarch64
+          - runner: macos-15
+            asset: agent-board-darwin-aarch64
+          - runner: macos-15-intel
+            asset: agent-board-darwin-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and verify native executable
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          cargo build --release --locked
+          test "$(target/release/agent-board --version)" = "agent-board ${RELEASE_TAG#v}"
+          scripts/install.sh --prefix "$RUNNER_TEMP/agent-board-smoke" --binary target/release/agent-board
+          DATABASE_URL="sqlite://$RUNNER_TEMP/agent-board-smoke.db?mode=rwc" "$RUNNER_TEMP/agent-board-smoke/bin/agent-board" migrate
+          mkdir release-assets
+          install -m 755 target/release/agent-board "release-assets/$ASSET"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: release-assets/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-board-*
+          merge-multiple: true
+          path: release-assets
+      - name: Create release for tested commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          cp scripts/install.sh release-assets/install.sh
+          cd release-assets
+          binaries=(agent-board-linux-x86_64 agent-board-linux-aarch64 agent-board-darwin-aarch64 agent-board-darwin-x86_64)
+          sha256sum "${binaries[@]}" install.sh > SHA256SUMS
+          git push origin "$GITHUB_SHA:refs/tags/$RELEASE_TAG"
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${binaries[@]}" SHA256SUMS install.sh

@@ -12,7 +12,7 @@ URL이 없으면 사용자에게 확인한다. 토큰이 없으면 필요한 인
 
 ## 설치와 연결
 
-1. `agent-board --help`로 설치 상태 확인. 없으면 승인된 checkout의 `scripts/install.sh`를 실행한다. checkout이 없고 사용자가 설치를 요청했다면 `gh repo clone jhbrunokim/agent-board`로 받고 설치한다. 권한/네트워크 실패 시 원인을 보고하고 인증을 우회하지 않는다. 현재 source install에는 Rust와 C build tools가 필요하다.
+1. `agent-board --version`으로 설치 상태를 확인한다. 설치를 요청받았다면 접근 권한이 있는 GitHub CLI로 `gh release download --repo jhbrunokim/agent-board --pattern install.sh`를 실행하고 `bash install.sh --release latest`로 설치한다. 사용자가 버전을 지정했다면 다운로드와 설치에 같은 버전 태그를 사용한다. 명령이 PATH에 없으면 `~/.local/bin/agent-board`를 실행한다. 소스 설치가 필요하면 docs/installation.md를 따른다. 인증 실패 시 접근 문제를 보고한다.
 2. 서버의 `/health`, `/ready`를 읽어 생존/스키마 준비 상태 확인. 원격 연결은 사용자가 지정한 TLS endpoint 또는 SSH tunnel을 사용한다.
 3. `agent-board request --url <URL> --path /api/v1/capabilities`로 지원 API와 인증된 project_id/principal 확인. BOARD_TOKEN은 CLI가 환경변수에서 읽는다. `--token ...`에 비밀을 직접 넣지 않는다.
 4. 처음에는 읽기만 수행한다. `/api/v1/events`, `/api/v1/search`, `/api/v1/context`를 이용한다. 접속 시험을 위해 임의 메시지나 작업을 생성하지 않는다.

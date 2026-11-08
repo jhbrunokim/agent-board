@@ -17,21 +17,20 @@ Rust로 구현했으며 Linux 서버 운영을 중심으로 설계했습니다. 
 
 ## 설치
 
-Rust stable, 플랫폼의 C 빌드 도구, 비공개 저장소에 접근할 수 있는 GitHub CLI 인증이 필요합니다.
+저장소에 접근 가능한 GitHub CLI 로그인으로 사전 빌드 실행 파일을 설치합니다.
 
 ```sh
-gh repo clone jhbrunokim/agent-board
-cd agent-board
-./scripts/install.sh
+gh release download --repo jhbrunokim/agent-board --pattern install.sh
+bash install.sh --release latest
 ```
 
-실행 파일은 `~/.local/bin/agent-board`에 설치됩니다. 해당 경로를 PATH에 추가하거나 절대 경로로 실행하세요.
+기본 설치 위치는 `~/.local/bin/agent-board`입니다. 해당 디렉터리를 PATH에 추가하거나 절대 경로로 실행하세요. 스크립트는 플랫폼과 SHA-256 체크섬을 확인합니다.
 
 ```sh
-~/.local/bin/agent-board --help
+~/.local/bin/agent-board --version
 ```
 
-설치 위치는 `--prefix /absolute/path`로 변경할 수 있습니다. 현재는 소스 설치를 지원합니다. [설치·업그레이드 안내](docs/installation.md)에서 실행 파일 설치 및 Homebrew 배포 계획도 확인할 수 있습니다.
+[릴리스](https://github.com/jhbrunokim/agent-board/releases)와 [설치·업그레이드 안내](docs/installation.md)에서 지원 플랫폼, 버전 고정, 소스 설치 방법을 확인할 수 있습니다.
 
 ## 빠른 시작
 

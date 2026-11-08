@@ -462,6 +462,15 @@ async fn mutate(s: &Store, who: &Identity, key: &str, command: Command) -> Resul
             knowledge.body = input.body;
             knowledge.status = "draft".into();
             knowledge.content_author = who.principal.clone();
+            sources::copy_revision(
+                s,
+                &mut tx,
+                who,
+                &id,
+                knowledge.content_revision - 1,
+                knowledge.content_revision,
+            )
+            .await?;
             save_object(
                 s,
                 &mut tx,
@@ -496,6 +505,15 @@ async fn mutate(s: &Store, who: &Identity, key: &str, command: Command) -> Resul
                     "knowledge" => {
                         let knowledge: Knowledge =
                             load(s, &mut tx, who, &input.subject_id, "knowledge").await?;
+                        sources::require_independent_evidence(
+                            s,
+                            &mut tx,
+                            who,
+                            &knowledge.id,
+                            knowledge.content_revision,
+                            &input.reviewer,
+                        )
+                        .await?;
                         (
                             knowledge.version,
                             knowledge.content_revision,
@@ -593,6 +611,25 @@ async fn mutate(s: &Store, who: &Identity, key: &str, command: Command) -> Resul
                     {
                         return Err(state_conflict("independent_reviewer_required"));
                     }
+                    sources::require_independent_evidence(
+                        s,
+                        &mut tx,
+                        who,
+                        &knowledge.id,
+                        knowledge.content_revision,
+                        &who.principal,
+                    )
+                    .await?;
+                    if input.verdict == "approved" {
+                        sources::require_evidence(
+                            s,
+                            &mut tx,
+                            who,
+                            &knowledge.id,
+                            knowledge.content_revision,
+                        )
+                        .await?;
+                    }
                     knowledge.status = if input.verdict == "approved" {
                         "verified"
                     } else {
@@ -664,14 +701,17 @@ async fn read_object(
     }
     let row = if let Some(v) = page.version {
         sqlx::query(&s.sql("SELECT h.state FROM wf_object_history h JOIN wf_objects o ON h.project_id=o.project_id AND h.id=o.id WHERE h.project_id=? AND h.id=? AND o.kind=? AND h.version=?"))
-            .bind(&who.project).bind(id).bind(kind).bind(v).fetch_optional(&s.pool).await?
+            .bind(&who.project).bind(&id).bind(kind).bind(v).fetch_optional(&s.pool).await?
     } else {
         sqlx::query(&s.sql("SELECT state FROM wf_objects WHERE project_id=? AND id=? AND kind=?"))
-            .bind(&who.project).bind(id).bind(kind).fetch_optional(&s.pool).await?
+            .bind(&who.project).bind(&id).bind(kind).fetch_optional(&s.pool).await?
     }.ok_or_else(missing)?;
-    Ok(Json(
-        json!({"data":decode::<Value>(&row.try_get::<String, _>("state")?)?}),
-    ))
+    let mut data = decode::<Value>(&row.try_get::<String, _>("state")?)?;
+    if kind == "knowledge" {
+        let revision = data["content_revision"].as_i64().ok_or_else(invalid)?;
+        data["sources"] = json!(sources::list(&s, &who, &id, revision).await?);
+    }
+    Ok(Json(json!({"data":data})))
 }
 async fn get_task(
     State(s): State<Store>,

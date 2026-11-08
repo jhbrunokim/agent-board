@@ -184,7 +184,25 @@ async fn contract(url: &str) {
     .await;
     let kid = k["id"].as_str().unwrap();
     let kp = format!("/api/v1/knowledge/{kid}");
-    let r=ok(a.clone(),"POST","/api/v1/reviews",&owner,"note-review",json!({"subject_kind":"knowledge","subject_id":kid,"subject_revision":1,"expected_version":1,"reviewer":"reviewer"})).await;
+    let source = ok(
+        a.clone(),
+        "POST",
+        "/api/v1/sources",
+        &owner,
+        "note-source",
+        json!({"uri":"urn:evidence:note","revision":"1","label":"Note evidence"}),
+    )
+    .await;
+    ok(
+        a.clone(),
+        "POST",
+        &format!("{kp}/sources"),
+        &owner,
+        "note-attach",
+        json!({"source_id":source["id"],"expected_version":1,"expected_content_revision":1}),
+    )
+    .await;
+    let r=ok(a.clone(),"POST","/api/v1/reviews",&owner,"note-review",json!({"subject_kind":"knowledge","subject_id":kid,"subject_revision":2,"expected_version":2,"reviewer":"reviewer"})).await;
     let v = ok(
         a.clone(),
         "POST",
@@ -201,11 +219,11 @@ async fn contract(url: &str) {
         &format!("{kp}/revisions"),
         &owner,
         "revise",
-        json!({"expected_version":2,"title":"Note","body":"Changed evidence"}),
+        json!({"expected_version":3,"title":"Note","body":"Changed evidence"}),
     )
     .await;
     assert_eq!(revised["status"], "draft");
-    assert_eq!(revised["content_revision"], 2);
+    assert_eq!(revised["content_revision"], 3);
     let history = ok(
         a.clone(),
         "GET",
@@ -216,14 +234,14 @@ async fn contract(url: &str) {
     )
     .await;
     assert_eq!(history["body"], "Original evidence");
-    let pending=ok(a.clone(),"POST","/api/v1/reviews",&owner,"pending",json!({"subject_kind":"knowledge","subject_id":kid,"subject_revision":2,"expected_version":3,"reviewer":"reviewer"})).await;
+    let pending=ok(a.clone(),"POST","/api/v1/reviews",&owner,"pending",json!({"subject_kind":"knowledge","subject_id":kid,"subject_revision":3,"expected_version":4,"reviewer":"reviewer"})).await;
     ok(
         a.clone(),
         "POST",
         &format!("{kp}/revisions"),
         &owner,
         "edit-again",
-        json!({"expected_version":3,"title":"Note","body":"Newest"}),
+        json!({"expected_version":4,"title":"Note","body":"Newest"}),
     )
     .await;
     assert_eq!(

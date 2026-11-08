@@ -1,6 +1,7 @@
 mod access;
 pub use access::Role;
 mod projections;
+mod sources;
 pub mod vault;
 mod workflows;
 use axum::{
@@ -109,7 +110,7 @@ impl Store {
                 .fetch_one(&mut *tx)
                 .await?
                 .try_get("version")?;
-        anyhow::ensure!(version <= 3, "database schema is newer than this server");
+        anyhow::ensure!(version <= 4, "database schema is newer than this server");
         for s in [
             "CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY)",
             "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, head BIGINT NOT NULL DEFAULT 0)",
@@ -140,6 +141,12 @@ impl Store {
                 .execute(&mut *tx)
                 .await?;
         }
+        if version < 4 {
+            sources::migrate(&mut tx).await?;
+            sqlx::query("INSERT INTO schema_version(version) VALUES (4)")
+                .execute(&mut *tx)
+                .await?;
+        }
         tx.commit().await?;
         Ok(())
     }
@@ -150,7 +157,7 @@ impl Store {
                 .await?
                 .try_get("version")?;
         anyhow::ensure!(
-            version == 3,
+            version == 4,
             "schema version mismatch; run migrate before starting this server"
         );
         Ok(())
@@ -319,6 +326,7 @@ pub fn router(s: Store) -> Router {
         .route("/api/v1/events", get(events))
         .route("/api/v1/capabilities", get(capabilities))
         .merge(workflows::routes())
+        .merge(sources::routes())
         .merge(projections::routes())
         .merge(access::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
@@ -441,11 +449,11 @@ async fn ready(State(s): State<Store>) -> Result<Json<Value>> {
     s.check_schema()
         .await
         .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "schema_not_ready"))?;
-    Ok(Json(json!({"status":"ready","schema_version":3})))
+    Ok(Json(json!({"status":"ready","schema_version":4})))
 }
 
 async fn capabilities(axum::Extension(who): axum::Extension<Identity>) -> Json<Value> {
     Json(
-        json!({"api_version":1,"schema_version":3,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","search","context","vault_export"],"instructions":"agent-board instructions","role":who.role,"scope":"project"}),
+        json!({"api_version":1,"schema_version":4,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","sources","search","context","vault_export"],"instructions":"agent-board instructions","role":who.role,"scope":"project"}),
     )
 }

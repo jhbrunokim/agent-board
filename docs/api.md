@@ -15,12 +15,16 @@
 
 조회는 `limit`(1–200), `after`(이전 next_cursor 그대로)를 지원합니다. 처음에는 after를 생략합니다. cursor는 프로젝트와 조회 종류/논의 ID에 묶여 있습니다. 원문은 events에 반복 포함되지 않습니다. cursor는 읽기 위치이며 접수/완료가 아닙니다.
 
-현재 API는 토큰으로 프로젝트를 고정하는 첫 버전입니다. docs/contracts.md의 workspace·team·receipt 등 전체 명세는 구현 로드맵이며 현재 기능을 의미하지 않습니다. schema_version=3이며 v1/v2 데이터를 유지하고 토큰 권한·철회 정보를 추가합니다. 서버는 현재 스키마가 아니면 시작을 거부합니다. 업그레이드 전 백업하고 서버를 중단한 뒤 migrate를 단독 실행하세요.
+현재 API는 토큰으로 프로젝트를 고정하는 첫 버전입니다. docs/contracts.md의 workspace·team·receipt 등 전체 명세는 구현 로드맵이며 현재 기능을 의미하지 않습니다. schema_version=4이며 v1/v2/v3 데이터를 유지하고 불변 source와 지식 revision별 근거 연결을 추가합니다. 서버는 현재 스키마가 아니면 시작을 거부합니다. 업그레이드 전 백업하고 서버를 중단한 뒤 migrate를 단독 실행하세요.
 
 
 ## 작업·검토·지식 API
 
 필드와 실행 예제는 [작업 흐름 API](workflows.md)를 참고하세요. CLI는 `request --method PATCH --body-file ... --key ...`로 상태 변경을 지원합니다. GET은 본문을 받지 않으며 POST/PATCH는 파일 본문과 멱등성 키가 필요합니다.
+
+## 근거 참조 API
+
+source 생성·조회, 지식 revision에 첨부, 새 승인 시 근거 조건은 [근거 연결 API](sources.md)를 참고하세요. URI 원문 가져오기와 최신성 확인은 제공하지 않습니다.
 
 ## 검색·맥락·Obsidian (초기 버전)
 

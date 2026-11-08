@@ -7,6 +7,7 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
+    Instructions,
     Migrate {
         #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
         database_url: String,
@@ -33,6 +34,14 @@ enum Command {
         #[arg(long, default_value = "127.0.0.1:7431")]
         bind: String,
     },
+    Export {
+        #[arg(long, default_value = "http://127.0.0.1:7431")]
+        url: String,
+        #[arg(long, env = "BOARD_TOKEN", hide_env_values = true)]
+        token: String,
+        #[arg(long)]
+        vault: std::path::PathBuf,
+    },
     Request {
         #[arg(long, default_value = "http://127.0.0.1:7431")]
         url: String,
@@ -51,6 +60,7 @@ enum Command {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     match Args::parse().command {
+        Command::Instructions => print!("{}", include_str!("../docs/agent-instructions.md")),
         Command::Migrate { database_url } => Store::connect(&database_url).await?.migrate().await?,
         Command::Provision {
             database_url,
@@ -90,6 +100,10 @@ async fn main() -> anyhow::Result<()> {
                     shutdown().await;
                 })
                 .await?;
+        }
+        Command::Export { url, token, vault } => {
+            let written = agent_board::vault::pull(&url, &token, &vault).await?;
+            println!("{}", serde_json::json!({"written":written}));
         }
         Command::Request {
             url,

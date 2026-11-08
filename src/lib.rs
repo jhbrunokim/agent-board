@@ -1,3 +1,5 @@
+mod projections;
+pub mod vault;
 mod workflows;
 use axum::{
     Json, Router,
@@ -297,7 +299,9 @@ pub fn router(s: Store) -> Router {
         .route("/api/v1/threads", post(create))
         .route("/api/v1/threads/{id}/messages", post(reply).get(read))
         .route("/api/v1/events", get(events))
+        .route("/api/v1/capabilities", get(capabilities))
         .merge(workflows::routes())
+        .merge(projections::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
         .route("/ready", get(ready))
         .route("/health", get(|| async { Json(json!({"status":"up"})) }))
@@ -419,4 +423,10 @@ async fn ready(State(s): State<Store>) -> Result<Json<Value>> {
         .await
         .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "schema_not_ready"))?;
     Ok(Json(json!({"status":"ready","schema_version":2})))
+}
+
+async fn capabilities(axum::Extension(who): axum::Extension<Identity>) -> Json<Value> {
+    Json(
+        json!({"api_version":1,"schema_version":2,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","search","context","vault_export"],"instructions":"agent-board instructions","scope":"project-wide read/write; no fine-grained roles yet"}),
+    )
 }

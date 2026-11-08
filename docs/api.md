@@ -40,7 +40,6 @@ source 생성·조회, 지식 revision에 첨부, 새 승인 시 근거 조건�
 agent-board export --vault /absolute/path/to/existing-vault
 ```
 
-BOARD_TOKEN으로 접근 가능한 프로젝트 자료만 `AgentBoard/<project-id>/`에 내보냅니다. 토큰은 vault에 저장하지 않습니다. 원본 ID 기반 파일명, YAML 속성, 구조화 본문을 가진 Markdown을 생성합니다. 처음에는 Obsidian에서 vault를 열고 관리 폴더를 탐색하세요. 백링크/논의별 묶음과 자연어 설명 화면은 후속 개선입니다.
+BOARD_TOKEN으로 접근 가능한 프로젝트 자료를 `AgentBoard/<project-id>/`에 내보냅니다. 논의 묶음·작업·지식·근거·검토 문서와 내부 링크를 생성합니다. 최초 전체 조회 이후에는 `/api/v1/vault`의 이벤트 기반 증분 feed를 사용합니다. 예전 `/api/v1/export`는 일반 자료 페이지 조회 API로 유지됩니다.
 
-수동 pull 방식이며 전체 ID 페이지를 조회하되 변경된 파일만 다시 씁니다. 파일 hash가 변경됐다면 사용자 수정으로 보고 원본을 보존한 채 실패합니다. 개인 노트/.obsidian은 수정하지 않습니다. 동시 export를 막는 `.export.lock`이 남아 있으면 실행 중인 exporter가 없는지 확인한 뒤 수동 삭제합니다. 삭제/권한 회수된 로컬 복사본의 자동 정리는 아직 지원하지 않습니다. 페이지 사이에 변경이 발생할 수 있으므로 전체 export가 동일 시점의 snapshot이라고 가정하지 마세요. 안정된 상태에서 다시 실행하면 현재 버전으로 수렴합니다.
-
+동기화 cursor, 중단 복구, 사용자 수정 충돌, 생략 표시 및 삭제 정책은 [Obsidian 동기화 안내](vault-sync.md)를 참고하세요.

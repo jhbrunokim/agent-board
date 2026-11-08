@@ -27,6 +27,22 @@ enum Command {
         project: String,
         #[arg(long)]
         principal: String,
+        #[arg(long, value_enum, default_value = "contributor")]
+        role: agent_board::Role,
+    },
+    Tokens {
+        #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
+        database_url: String,
+        #[arg(long)]
+        project: String,
+    },
+    Revoke {
+        #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
+        database_url: String,
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        token_id: String,
     },
     Serve {
         #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
@@ -80,15 +96,38 @@ async fn main() -> anyhow::Result<()> {
             database_url,
             project,
             principal,
+            role,
         } => {
             let token = Store::connect(&database_url)
                 .await?
-                .grant(&project, &principal)
+                .grant_role(&project, &principal, role)
                 .await?;
             println!(
                 "{}",
                 serde_json::json!({"project_id":project,"token":token})
             );
+        }
+        Command::Tokens {
+            database_url,
+            project,
+        } => println!(
+            "{}",
+            Store::connect(&database_url)
+                .await?
+                .list_tokens(&project)
+                .await?
+        ),
+        Command::Revoke {
+            database_url,
+            project,
+            token_id,
+        } => {
+            let found = Store::connect(&database_url)
+                .await?
+                .revoke_token(&project, &token_id)
+                .await?;
+            anyhow::ensure!(found, "token not found");
+            println!("{}", serde_json::json!({"revoked":true}));
         }
         Command::Serve { database_url, bind } => {
             let s = Store::connect(&database_url).await?;

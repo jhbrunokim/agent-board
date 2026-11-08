@@ -37,7 +37,10 @@ async fn contract(url: &str) {
     s.migrate().await.unwrap();
     let (project, token) = s.provision("one", "lead").await.unwrap();
     let (_, other) = s.provision("two", "lead").await.unwrap();
-    let reply_token = s.grant(&project, "reviewer").await.unwrap();
+    let reply_token = s
+        .grant_role(&project, "reviewer", agent_board::Role::Reviewer)
+        .await
+        .unwrap();
     let app = router(s);
     assert_eq!(
         request(

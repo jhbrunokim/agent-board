@@ -312,6 +312,7 @@ async fn mutate(s: &Store, who: &Identity, key: &str, command: Command) -> Resul
         .fetch_one(&mut *tx)
         .await?
         .try_get("head")?;
+    s.active(who, &mut tx).await?;
     let previous = sqlx::query(&s.sql("SELECT hash,response FROM dedup WHERE project_id=? AND principal=? AND operation=? AND key=?"))
         .bind(&who.project).bind(&who.principal).bind(&operation).bind(key).fetch_optional(&mut *tx).await?;
     if let Some(row) = previous {
@@ -517,7 +518,7 @@ async fn mutate(s: &Store, who: &Identity, key: &str, command: Command) -> Resul
                 return Err(state_conflict("independent_reviewer_required"));
             }
             if sqlx::query(
-                &s.sql("SELECT principal FROM tokens WHERE project_id=? AND principal=? LIMIT 1"),
+                &s.sql("SELECT principal FROM tokens WHERE project_id=? AND principal=? AND revoked=0 AND role IN ('reviewer','admin') LIMIT 1"),
             )
             .bind(&who.project)
             .bind(&input.reviewer)

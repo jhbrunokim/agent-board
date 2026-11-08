@@ -33,7 +33,10 @@ async fn contract(url: &str) {
     let s = Store::connect(url).await.unwrap();
     s.migrate().await.unwrap();
     let (project, owner) = s.provision("workflow", "owner").await.unwrap();
-    let reviewer = s.grant(&project, "reviewer").await.unwrap();
+    let reviewer = s
+        .grant_role(&project, "reviewer", agent_board::Role::Reviewer)
+        .await
+        .unwrap();
     let (_, outsider) = s.provision("other", "other").await.unwrap();
     let a = router(s);
     let task = ok(

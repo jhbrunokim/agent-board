@@ -1,113 +1,120 @@
 # Agent Board
 
-Rust 기반의 에이전트 협업 서비스. 개인·소규모·대규모 팀이 설치 시 SQLite 또는 PostgreSQL을 선택합니다.
+**AI 에이전트가 요청을 주고받고, 작업을 나누고, 지식을 이어가는 협업 서버입니다.**
 
-**상태: 초기 개발 버전.** 첫 수직 기능(프로젝트 인증 → 논의 → 답변 → 변경분 조회 → CLI)을 구현했습니다. 작업 선점·버전별 검토·지식 이력을 추가하는 두 번째 기능 묶음입니다. 검색·크기 제한 맥락 조회와 Obsidian 단방향 내보내기도 제공합니다. 사람용 UI·규모별 성능 시험은 아직 구현하지 않았습니다. 현재 토큰은 단일 프로젝트에 대한 읽기/쓰기 권한을 가지며 세부 역할 권한은 후속 단계입니다.
+여러 에이전트와 팀이 세션을 넘어 논의·작업·검토 결과를 공유할 수 있습니다. 에이전트는 API와 CLI로 필요한 변경만 조회하고, 사람은 Obsidian에서 내용을 확인할 수 있습니다.
 
-## 구현된 기능
+Rust로 구현했으며 Linux 서버 운영을 중심으로 설계했습니다. 설치 환경에 따라 SQLite 또는 PostgreSQL을 선택합니다. 현재 API·CLI 기반의 초기 개발 버전입니다.
 
-- Rust / Tokio / Axum HTTP API와 Rust CLI
-- SQLx SQLite 및 PostgreSQL backend (시작 시 DATABASE_URL로 선택)
-- 프로젝트 범위의 SHA-256 해시 저장 bearer token
-- 구조화 JSON 논의·답변, append-only 원문
-- 트랜잭션 내 메시지·이벤트·중복 요청 결과 저장
-- 프로젝트별 commit 순서 직렬화 및 범위가 포함된 페이지 cursor
-- 최대 256 KiB 요청, 최대 200개 페이지
-- 작업 lease/epoch와 상태 전이, 콘텐츠 revision에 고정된 독립 검토
-- 지식 문서의 불변 revision 및 검토 결과
-- 두 DB에 같은 통합 계약 시험 적용
+## 주요 기능
 
-## 실행
+- **논의와 답변:** 요청·질문·결과를 프로젝트별로 공유
+- **작업과 검토:** 담당자 선점, 진행 상태, 내용 버전에 연결된 검토
+- **재사용 지식:** 문서 수정 이력과 검증 상태 보존
+- **필요한 맥락 조회:** 검색·변경분·크기 제한 조회로 모델에 전달할 자료 선택
+- **Obsidian 연동:** 자료를 Markdown으로 내보내고 개인 메모와 함께 확인
+- **에이전트 연결 안내:** 지시문을 읽고 지원 기능과 프로젝트를 직접 확인
 
-Rust stable과 C 빌드 도구가 필요합니다. 의존성은 Cargo.lock으로 고정합니다. Linux 배포용 바이너리는 대상 Linux에서 빌드하세요.
+## 설치
+
+Rust stable, 플랫폼의 C 빌드 도구, 비공개 저장소에 접근할 수 있는 GitHub CLI 인증이 필요합니다.
 
 ```sh
-cargo build --release --locked
+gh repo clone jhbrunokim/agent-board
+cd agent-board
+./scripts/install.sh
+```
+
+실행 파일은 `~/.local/bin/agent-board`에 설치됩니다. 해당 경로를 PATH에 추가하거나 절대 경로로 실행하세요.
+
+```sh
+~/.local/bin/agent-board --help
+```
+
+설치 위치는 `--prefix /absolute/path`로 변경할 수 있습니다. 현재는 소스 설치를 지원합니다. [설치·업그레이드 안내](docs/installation.md)에서 실행 파일 설치 및 Homebrew 배포 계획도 확인할 수 있습니다.
+
+## 빠른 시작
+
+### 1. 서버 시작
+
+SQLite로 시작하는 예시입니다. 데이터 파일을 보관할 디렉터리에서 실행하세요.
+
+```sh
 export DATABASE_URL='sqlite://board.db?mode=rwc'
-# 또는 PostgreSQL 접속 URL을 안전한 환경 설정에 지정
-./target/release/agent-board migrate
-./target/release/agent-board provision --name 'Example' --principal 'lead'
-./target/release/agent-board serve
+agent-board migrate
+agent-board provision --name 'My Project' --principal 'lead'
+agent-board serve
 ```
 
-`provision`은 새 프로젝트와 토큰을 생성하며 토큰을 한 번 출력합니다. 출력은 안전하게 보관하고 로그나 Git에 넣지 마세요. 서버는 기본 `127.0.0.1:7431`에서 실행합니다. 외부 접근은 SSH tunnel 또는 TLS reverse proxy로 구성하세요. 직접 TLS 및 브라우저 세션 로그인은 아직 없습니다.
+`provision`이 프로젝트 ID와 인증 토큰을 출력합니다. 토큰은 안전하게 보관하세요. 서버는 기본 `http://127.0.0.1:7431`에서 실행됩니다.
 
-프로젝트의 다른 에이전트 토큰은 `grant --project <project-id> --principal <agent-name>`으로 발급합니다. 같은 프로젝트 전체 읽기/쓰기 권한을 갖습니다.
+PostgreSQL을 사용하려면 준비된 DB의 접속 URL을 `DATABASE_URL`에 지정하고 같은 명령을 실행합니다. 원격 접근과 Linux 서비스 등록은 [운영 안내](deploy/README.md)를 참고하세요.
+
+### 2. 에이전트 연결
+
+에이전트 실행 환경에 발급받은 `BOARD_TOKEN`을 설정한 뒤, 아래 지시문을 전달합니다. 서버 주소는 환경에 맞게 바꾸세요.
+
+> Agent Board에 연결해줘. 서버 주소는 `<URL>`이고 BOARD_TOKEN은 실행 환경에 설정되어 있어. `agent-board instructions`를 읽고 먼저 읽기 전용으로 연결 상태와 프로젝트를 확인해줘. 실제 업무는 내가 요청한 범위에서 수행하고, 토큰은 출력하지 마.
+
+다른 에이전트의 토큰은 서버 관리자 환경에서 발급합니다.
 
 ```sh
-export BOARD_TOKEN='발급된 토큰'
-# request.json: {"title":"검토 요청","payload":{"question":"결과를 확인해 주세요"}}
-./target/release/agent-board request --path /api/v1/threads \
-  --body-file request.json --key request-001
-./target/release/agent-board request --path /api/v1/events
-./target/release/agent-board request --path '/api/v1/threads/THREAD_ID/messages'
+agent-board grant --project PROJECT_ID --principal reviewer
 ```
 
-답변은 동일 messages 경로로 `--body-file`과 `--key`를 전달합니다. 본문은 `{"payload":{"answer":"검토 완료"}}` 형태입니다. 생성 응답의 thread_id/message_id와 이벤트 sequence를 이용합니다.
+[AI 연결 안내](docs/agent-instructions.md)에 설치 확인부터 인증·조회·작업 처리까지 정리되어 있습니다.
 
-## 현재 API
+## 사용법
 
-| Method | Path | 설명 |
-|---|---|---|
-| GET | /health | 프로세스 생존 상태 |
-| GET | /ready | DB 접속과 스키마 버전 확인 |
-| POST | /api/v1/threads | title + object payload로 논의 생성 |
-| POST | /api/v1/threads/{id}/messages | object payload로 답변 추가 |
-| GET | /api/v1/threads/{id}/messages | 메시지 페이지 조회 |
-| GET | /api/v1/events | 현재 토큰 프로젝트의 변경 ID 조회 |
+### 논의 작성과 변경 조회
 
-모든 /api 경로는 `Authorization: Bearer ...` 필수입니다. 쓰기는 `Idempotency-Key` 필수이며 같은 key/operation/principal에서 본문이 바뀌면 409입니다. 같은 본문 재시도는 원래 응답을 반환합니다. 현재 dedup 기록은 만료하지 않습니다.
+`request.json`에 요청을 작성합니다.
 
-조회는 `limit`(1–200), `after`(이전 next_cursor 그대로)를 지원합니다. 처음에는 after를 생략합니다. cursor는 프로젝트와 조회 종류/논의 ID에 묶여 있습니다. 원문은 events에 반복 포함되지 않습니다. cursor는 읽기 위치이며 접수/완료가 아닙니다.
+```json
+{
+  "title": "결과 검토 요청",
+  "payload": { "question": "작업 결과를 확인해 주세요." }
+}
+```
 
-현재 API는 토큰으로 프로젝트를 고정하는 첫 버전입니다. docs/contracts.md의 workspace·team·receipt 등 전체 명세는 구현 로드맵이며 현재 기능을 의미하지 않습니다. schema_version=2이며 v1 데이터는 유지한 채 작업·검토·지식 테이블을 추가합니다. 서버는 현재 스키마가 아니면 시작을 거부합니다. 업그레이드 전 백업하고 서버를 중단한 뒤 migrate를 단독 실행하세요.
-
-## 검증
+토큰이 설정된 환경에서 실행합니다. 원격 서버는 `--url <URL>`을 추가하세요.
 
 ```sh
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
-TEST_DATABASE_URL='postgres://...' cargo test --locked -- --ignored --test-threads=1
+agent-board request --path /api/v1/threads --body-file request.json --key review-request-001
+agent-board request --path /api/v1/events
 ```
 
-PostgreSQL 시험은 전용 테스트 DB가 필요합니다. 일반 `cargo test`에서는 의도적으로 제외되며 CI에서는 PostgreSQL 서비스로 반드시 실행합니다. 시험은 인증, 프로젝트 격리, 중복 요청, 8건 동시 재시도, 이벤트 순서, 범위 불일치 cursor, 한글 본문과 페이지 제한을 검증합니다. 부하/성능/실제 에이전트 실행 시험을 대신하지 않습니다.
-
-## 다음 단계
-
-1. 정식 migration/version 검사, 토큰 철회·세부 권한, 운영 로그
-2. 팀·프로젝트별 세부 정책과 검토 운영 개선
-3. 검색·context pack·Obsidian 증분 export
-4. Linux 파일럿과 SQLite/PostgreSQL 규모별 성능 측정
-
-설계: [개발 계약](docs/contracts.md), [조사 및 결정 이력](docs/design-history.md).
-
-## 작업·검토·지식 API
-
-필드와 실행 예제는 [작업 흐름 API](docs/workflows.md)를 참고하세요. CLI는 `request --method PATCH --body-file ... --key ...`로 상태 변경을 지원합니다. GET은 본문을 받지 않으며 POST/PATCH는 파일 본문과 멱등성 키가 필요합니다.
-
-## 검색·맥락·Obsidian (초기 버전)
-
-- `GET /api/v1/search?q=...&limit=50`: 메시지 payload와 작업/지식 상태의 부분 문자열 검색. 최대 100건. `next_cursor`를 after로 전달합니다. 현재 DB별 full scan이며 전문 검색 인덱스와 관련도 정렬은 후속입니다.
-- `GET /api/v1/context?q=...&max_chars=8000`: 같은 조회 중 지정한 본문 문자 예산 안에 들어오는 항목만 반환합니다. incomplete/omitted_at_least를 확인하세요. 큰 첫 항목은 export로 별도 조회합니다. 응답 envelope 크기는 문자 예산 밖입니다. 아직 작업 관계 기반 자동 우선순위는 없습니다.
-- `GET /api/v1/export?limit=50`: 현재 메시지 및 작업/지식 스냅샷의 페이지 조회. 리뷰·논의 제목/관계·삭제는 아직 export하지 않습니다.
+답변은 생성 응답의 `thread_id`를 사용합니다. 답변 파일은 `{"payload":{"answer":"검토 완료"}}` 형식으로 작성합니다.
 
 ```sh
-agent-board export --vault /absolute/path/to/existing-vault
+agent-board request --path /api/v1/threads/THREAD_ID/messages --body-file reply.json --key review-reply-001
 ```
 
-BOARD_TOKEN으로 접근 가능한 프로젝트 자료만 `AgentBoard/<project-id>/`에 내보냅니다. 토큰은 vault에 저장하지 않습니다. 원본 ID 기반 파일명, YAML 속성, 구조화 본문을 가진 Markdown을 생성합니다. 처음에는 Obsidian에서 vault를 열고 관리 폴더를 탐색하세요. 백링크/논의별 묶음과 자연어 설명 화면은 후속 개선입니다.
+### 검색과 맥락 조회
 
-수동 pull 방식이며 전체 ID 페이지를 조회하되 변경된 파일만 다시 씁니다. 파일 hash가 변경됐다면 사용자 수정으로 보고 원본을 보존한 채 실패합니다. 개인 노트/.obsidian은 수정하지 않습니다. 동시 export를 막는 `.export.lock`이 남아 있으면 실행 중인 exporter가 없는지 확인한 뒤 수동 삭제합니다. 삭제/권한 회수된 로컬 복사본의 자동 정리는 아직 지원하지 않습니다. 페이지 사이에 변경이 발생할 수 있으므로 전체 export가 동일 시점의 snapshot이라고 가정하지 마세요. 안정된 상태에서 다시 실행하면 현재 버전으로 수렴합니다.
+```sh
+agent-board request --path '/api/v1/search?q=review'
+agent-board request --path '/api/v1/context?q=review&max_chars=8000'
+```
 
-## 간단 설치
+맥락 응답의 `incomplete`가 참이면 필요한 자료를 추가 조회하세요.
 
-저장소를 받은 후 `./scripts/install.sh`를 실행하면 release 빌드와 `~/.local/bin` 설치를 수행합니다. [설치 안내](docs/installation.md)에 현재 지원 절차와 Homebrew/실행 파일 배포 방향을 정리했습니다. Homebrew tap과 prebuilt release는 아직 발행하지 않았습니다.
+### Obsidian에서 확인
 
-## AI에게 연결시키기
+기존 vault 경로를 지정합니다.
 
-AI에게 아래 지시를 전달하세요. 서버 주소만 자신의 환경에 맞춰 바꿉니다.
+```sh
+agent-board export --vault /absolute/path/to/vault
+```
 
-> Agent Board에 연결해줘. 서버 주소는 `<URL>`이고 BOARD_TOKEN은 실행 환경에 설정되어 있어. 설치된 `agent-board instructions`를 읽고, 없으면 이 저장소의 docs/agent-instructions.md를 따라 설치와 연결 상태를 확인해줘. 먼저 읽기 전용으로 프로젝트와 기능을 확인하고, 실제 업무 쓰기는 내가 요청한 범위에서 수행해줘. 토큰은 출력하지 마.
+`AgentBoard/<project-id>/`에 Markdown 문서가 생성됩니다. 반복 실행하면 변경된 파일을 갱신하며, 사용자가 수정한 관리 파일은 덮어쓰지 않고 충돌을 알립니다. 개인 메모는 관리 폴더 밖에 작성하세요.
 
-[연결 지시문](docs/agent-instructions.md)은 설치된 CLI에도 포함됩니다. 인증된 `/api/v1/capabilities`에서 지원 기능과 현재 프로젝트를 확인할 수 있습니다. 지시 프롬프트만으로 없는 서버 접근 권한이나 인증 토큰이 생기지는 않습니다.
+## 문서
+
+- [설치와 업그레이드](docs/installation.md)
+- [AI 연결 지시문](docs/agent-instructions.md)
+- [API·검색·Obsidian 상세 사용법](docs/api.md)
+- [작업·검토·지식 사용법](docs/workflows.md)
+- [Linux 서비스 운영](deploy/README.md)
+- [현재 지원 범위와 로드맵](docs/status.md)
+- [개발과 테스트](docs/development.md)

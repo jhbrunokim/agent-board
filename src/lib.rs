@@ -1,4 +1,5 @@
 mod access;
+mod mentions;
 mod task_context;
 mod vault_feed;
 pub use access::Role;
@@ -112,7 +113,7 @@ impl Store {
                 .fetch_one(&mut *tx)
                 .await?
                 .try_get("version")?;
-        anyhow::ensure!(version <= 5, "database schema is newer than this server");
+        anyhow::ensure!(version <= 6, "database schema is newer than this server");
         for s in [
             "CREATE TABLE IF NOT EXISTS schema_version (version BIGINT PRIMARY KEY)",
             "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, head BIGINT NOT NULL DEFAULT 0)",
@@ -155,6 +156,12 @@ impl Store {
                 .execute(&mut *tx)
                 .await?;
         }
+        if version < 6 {
+            mentions::migrate(&mut tx).await?;
+            sqlx::query("INSERT INTO schema_version(version) VALUES (6)")
+                .execute(&mut *tx)
+                .await?;
+        }
         tx.commit().await?;
         Ok(())
     }
@@ -165,7 +172,7 @@ impl Store {
                 .await?
                 .try_get("version")?;
         anyhow::ensure!(
-            version == 5,
+            version == 6,
             "schema version mismatch; run migrate before starting this server"
         );
         Ok(())
@@ -291,7 +298,15 @@ impl Store {
         .bind(input.payload.to_string())
         .execute(&mut *tx)
         .await?;
-        let response = json!({"message_id":id,"thread_id":thread_id,"sequence":seq});
+        let mut response = json!({"message_id":id,"thread_id":thread_id,"sequence":seq});
+        let (notifications, truncated) =
+            mentions::enqueue(self, &mut tx, who, &id, seq, input).await?;
+        if notifications > 0 {
+            response["notifications_queued"] = json!(notifications);
+        }
+        if truncated {
+            response["mentions_truncated"] = json!(true);
+        }
         sqlx::query(&self.sql("INSERT INTO events(project_id,seq,body) VALUES (?,?,?)"))
             .bind(&who.project)
             .bind(seq)
@@ -318,6 +333,8 @@ struct Identity {
 pub struct Input {
     pub title: Option<String>,
     pub payload: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mentions: Option<Vec<String>>,
 }
 async fn auth(State(s): State<Store>, mut request: Request, next: Next) -> Result<Response> {
     let who = s.authenticate(request.headers()).await?;
@@ -339,6 +356,7 @@ pub fn router(s: Store) -> Router {
         .merge(vault_feed::routes())
         .merge(projections::routes())
         .merge(access::routes())
+        .merge(mentions::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))
         .route("/ready", get(ready))
         .route("/health", get(|| async { Json(json!({"status":"up"})) }))
@@ -459,11 +477,11 @@ async fn ready(State(s): State<Store>) -> Result<Json<Value>> {
     s.check_schema()
         .await
         .map_err(|_| Error(StatusCode::SERVICE_UNAVAILABLE, "schema_not_ready"))?;
-    Ok(Json(json!({"status":"ready","schema_version":5})))
+    Ok(Json(json!({"status":"ready","schema_version":6})))
 }
 
 async fn capabilities(axum::Extension(who): axum::Extension<Identity>) -> Json<Value> {
     Json(
-        json!({"api_version":1,"schema_version":5,"project_id":who.project,"principal":who.principal,"features":["threads","events","tasks","claims","reviews","knowledge","sources","task_context","search","context","vault_export"],"instructions":"agent-board instructions","role":who.role,"scope":"project"}),
+        json!({"api_version":1,"schema_version":6,"project_id":who.project,"principal":who.principal,"features":["threads","events","mentions","leader_inbox","tasks","claims","reviews","knowledge","sources","task_context","search","context","vault_export"],"instructions":"agent-board instructions","role":who.role,"scope":"project"}),
     )
 }

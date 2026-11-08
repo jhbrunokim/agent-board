@@ -16,8 +16,8 @@ bash install.sh --release latest
 특정 버전을 쓰려면 다운로드와 설치에 같은 태그를 지정합니다.
 
 ```sh
-gh release download v0.1.0 --repo jhbrunokim/agent-board --pattern install.sh
-bash install.sh --release v0.1.0
+gh release download v0.1.1 --repo jhbrunokim/agent-board --pattern install.sh
+bash install.sh --release v0.1.1
 ```
 
 ## 소스에서 설치
@@ -43,7 +43,7 @@ CLI 설치와 서버 배치는 별도입니다. 현재 간편 설치 경로는 �
 Cargo.toml과 Cargo.lock에서 버전을 준비하고 main의 계약 테스트를 확인합니다. 아래 워크플로는 네 플랫폼의 빌드, 버전 확인, 설치, SQLite 스키마 생성이 모두 성공한 뒤 해당 커밋의 릴리스를 생성합니다.
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.1.0 -f publish=true
+gh workflow run release.yml --ref main -f tag=v0.1.1 -f publish=true
 ```
 
 `publish=false`는 빌드와 검증만 실행합니다. 실패한 실행에서 초안이 남았다면 태그, 커밋과 업로드된 자산을 확인한 뒤 복구하세요.

@@ -28,14 +28,17 @@ impl Role {
     }
 }
 pub(super) fn allowed(who: &Identity, method: &str, path: &str) -> bool {
-    if path.starts_with("/api/v1/tokens") {
+    if path.starts_with("/api/v1/tokens") || path.starts_with("/api/v1/mention-teams/") {
         return matches!(who.role, Role::Admin);
+    }
+    if method == "POST" && path.starts_with("/api/v1/inbox/") && path.ends_with("/ack") {
+        return true;
     }
     match who.role {
         Role::Admin => true,
         Role::Reader => method == "GET",
         Role::Reviewer => true,
-        Role::Contributor => !path.starts_with("/api/v1/tokens") && !path.ends_with("/verdicts"),
+        Role::Contributor => !path.ends_with("/verdicts"),
     }
 }
 impl Store {

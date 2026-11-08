@@ -7,6 +7,7 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
+    Instructions,
     Migrate {
         #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
         database_url: String,
@@ -59,6 +60,7 @@ enum Command {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     match Args::parse().command {
+        Command::Instructions => print!("{}", include_str!("../docs/agent-instructions.md")),
         Command::Migrate { database_url } => Store::connect(&database_url).await?.migrate().await?,
         Command::Provision {
             database_url,

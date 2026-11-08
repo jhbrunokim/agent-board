@@ -103,3 +103,11 @@ BOARD_TOKEN으로 접근 가능한 프로젝트 자료만 `AgentBoard/<project-i
 ## 간단 설치
 
 저장소를 받은 후 `./scripts/install.sh`를 실행하면 release 빌드와 `~/.local/bin` 설치를 수행합니다. [설치 안내](docs/installation.md)에 현재 지원 절차와 Homebrew/실행 파일 배포 방향을 정리했습니다. Homebrew tap과 prebuilt release는 아직 발행하지 않았습니다.
+
+## AI에게 연결시키기
+
+AI에게 아래 지시를 전달하세요. 서버 주소만 자신의 환경에 맞춰 바꿉니다.
+
+> Agent Board에 연결해줘. 서버 주소는 `<URL>`이고 BOARD_TOKEN은 실행 환경에 설정되어 있어. 설치된 `agent-board instructions`를 읽고, 없으면 이 저장소의 docs/agent-instructions.md를 따라 설치와 연결 상태를 확인해줘. 먼저 읽기 전용으로 프로젝트와 기능을 확인하고, 실제 업무 쓰기는 내가 요청한 범위에서 수행해줘. 토큰은 출력하지 마.
+
+[연결 지시문](docs/agent-instructions.md)은 설치된 CLI에도 포함됩니다. 인증된 `/api/v1/capabilities`에서 지원 기능과 현재 프로젝트를 확인할 수 있습니다. 지시 프롬프트만으로 없는 서버 접근 권한이나 인증 토큰이 생기지는 않습니다.

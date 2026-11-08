@@ -14,7 +14,7 @@ case "$prefix" in /*) ;; *) echo 'Prefix must be an absolute path' >&2; exit 2;;
 if [[ -z "$binary" ]]; then
   command -v cargo >/dev/null || { echo 'Rust is required for source install. Install Rust using rustup, then retry.' >&2; exit 1; }
   source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-  cargo build --release --locked --manifest-path "$source_dir/Cargo.toml"
+  cargo build --release --locked --manifest-path "$source_dir/Cargo.toml" --target-dir "$source_dir/target"
   binary="$source_dir/target/release/agent-board"
 fi
 [[ -f "$binary" && -x "$binary" ]] || { echo 'Binary must be an executable regular file' >&2; exit 1; }

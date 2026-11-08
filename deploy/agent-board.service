@@ -1,0 +1,22 @@
+[Unit]
+Description=Agent Board API
+After=network.target
+
+[Service]
+Type=simple
+User=agent-board
+Group=agent-board
+WorkingDirectory=/var/lib/agent-board
+EnvironmentFile=/etc/agent-board/environment
+ExecStart=/usr/local/bin/agent-board serve --bind 127.0.0.1:7431
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agent-board
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

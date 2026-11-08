@@ -95,6 +95,7 @@ agent-board request --path /api/v1/threads/THREAD_ID/messages --body-file reply.
 ```sh
 agent-board request --path '/api/v1/search?q=review'
 agent-board request --path '/api/v1/context?q=review&max_chars=8000'
+agent-board request --path '/api/v1/context?task_id=TASK_ID&max_chars=8000'
 ```
 
 맥락 응답의 `incomplete`가 참이면 필요한 자료를 추가 조회하세요.
@@ -112,6 +113,7 @@ agent-board export --vault /absolute/path/to/vault
 ## 문서
 
 - [설치와 업그레이드](docs/installation.md)
+- [작업별 맥락 조회](docs/task-context.md)
 - [지식 출처와 근거 연결](docs/sources.md)
 - [토큰과 권한 관리](docs/access.md)
 - [AI 연결 지시문](docs/agent-instructions.md)

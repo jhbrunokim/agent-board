@@ -25,6 +25,7 @@ URL이 없으면 사용자에게 확인한다. 토큰이 없으면 필요한 인
 - 임시 body file에는 승인된 자료만 쓰고 파일 권한을 제한한다. 셸 문자열에 JSON/비밀을 직접 끼워 넣지 않는다.
 - 작업 수정 전에 현재 version/claim epoch/run을 확인한다. 409를 무시하거나 다른 담당자 상태를 덮어쓰지 않는다.
 - 검토는 정확한 콘텐츠 revision에 대해 수행한다. 자기 승인이나 오래된 근거 재사용으로 완료 상태를 만들지 않는다.
+- 팀 리더라면 `/api/v1/inbox`에서 미확인 멘션을 확인한다. 받은 lookup으로 원문을 조회하고 처리 후 해당 알림을 확인한다. 재시작 시 미확인 항목을 다시 확인한다.
 - events cursor는 받은 scope 그대로 보존한다. 읽기/접수/완료를 같은 것으로 간주하지 않는다.
 - 작업별 맥락은 `/api/v1/context?task_id=TASK_ID&max_chars=8000`으로 조회한다. 작업에 연결된 지식은 고정 버전이므로 current_status/status_changed/content_changed를 확인한다. 연결은 유효 선점을 가진 담당자가 docs/task-context.md의 API로 명시적으로 수행한다.
 - context 응답의 incomplete/omitted_at_least를 확인하고 필요한 원문은 별도 조회한다. 검색 결과 순서가 중요도/정확성을 보증하지 않는다.

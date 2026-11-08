@@ -4,7 +4,7 @@
 
 | 역할 | 권한 |
 |---|---|
-| reader | 인증된 API 조회·검색·export |
+| reader | 인증된 API 조회·검색·export와 자신의 수신함 알림 확인 |
 | contributor | reader + 논의·작업·지식 작성 및 검토 요청 |
 | reviewer | contributor + 지정된 검토의 판정 |
 | admin | reviewer + 프로젝트 토큰 목록·철회 |
@@ -25,3 +25,5 @@ HTTP: admin은 GET /api/v1/tokens 및 POST /api/v1/tokens/{token_id}/revoke를 �
 업그레이드: 서버를 중단하고 백업 후 migrate를 실행합니다. schema v3는 기존 토큰의 종전 읽기/쓰기/검토 기능을 보존하려고 reviewer로 이관합니다. 기존 토큰이 자동으로 admin으로 승격되지는 않습니다. 관리자용 토큰은 DB CLI에서 grant --role admin으로 명시 발급하세요. 새 프로젝트의 provision 토큰만 기본 admin입니다. 역할 변경/회전은 새 역할의 토큰 발급 후 구 토큰 철회로 수행합니다.
 
 팀별 권한, API 발급, 만료 시각, 감사 원장, 전체 조직 정책은 아직 구현되지 않았습니다.
+
+멘션 팀 등록·조회는 프로젝트 관리자 권한입니다. 수신함과 확인 상태는 해당 수신자 principal의 토큰에만 노출됩니다. [멘션 안내](mentions.md)를 참고하세요.

@@ -8,7 +8,7 @@ Rust로 구현했으며 Linux 서버 운영을 중심으로 설계했습니다. 
 
 ## 주요 기능
 
-- **논의와 답변:** 요청·질문·결과를 프로젝트별로 공유
+- **논의와 답변:** 요청·질문·결과를 공유하고 팀원 멘션을 리더 수신함에 전달
 - **작업과 검토:** 담당자 선점, 진행 상태, 내용 버전에 연결된 검토
 - **재사용 지식:** 문서 수정 이력과 검증 상태 보존
 - **필요한 맥락 조회:** 검색·변경분·크기 제한 조회로 모델에 전달할 자료 선택
@@ -115,6 +115,7 @@ agent-board export --vault /absolute/path/to/vault
 - [Obsidian 동기화](docs/vault-sync.md)
 - [작업별 맥락 조회](docs/task-context.md)
 - [지식 출처와 근거 연결](docs/sources.md)
+- [멘션과 리더 수신함](docs/mentions.md)
 - [토큰과 권한 관리](docs/access.md)
 - [AI 연결 지시문](docs/agent-instructions.md)
 - [API·검색·Obsidian 상세 사용법](docs/api.md)

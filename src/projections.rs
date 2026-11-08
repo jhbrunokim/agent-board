@@ -10,12 +10,16 @@ pub(super) fn routes() -> Router<Store> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Options {
+    task_id: Option<String>,
     q: Option<String>,
     after: Option<String>,
     limit: Option<i64>,
     max_chars: Option<usize>,
 }
 async fn documents(s: &Store, who: &Identity, o: &Options) -> Result<(Vec<Value>, bool)> {
+    if o.task_id.is_some() {
+        return Err(invalid());
+    }
     let limit = o.limit.unwrap_or(50);
     if !(1..=100).contains(&limit) || o.q.as_ref().is_some_and(|q| q.len() > 256) {
         return Err(invalid());
@@ -100,6 +104,12 @@ async fn context(
     let budget = o.max_chars.unwrap_or(8000);
     if !(512..=32000).contains(&budget) {
         return Err(invalid());
+    }
+    if let Some(id) = o.task_id {
+        if o.q.is_some() || o.after.is_some() || o.limit.is_some() {
+            return Err(invalid());
+        }
+        return task_context::build(s, who, id, budget).await;
     }
     let (items, more) = documents(&s, &who, &o).await?;
     let mut selected = Vec::new();

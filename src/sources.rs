@@ -251,7 +251,7 @@ pub(super) async fn list(s: &Store, who: &Identity, id: &str, revision: i64) -> 
         .map(source)
         .collect()
 }
-async fn list_in_tx(
+pub(super) async fn list_in_tx(
     s: &Store,
     tx: &mut Tx<'_>,
     who: &Identity,

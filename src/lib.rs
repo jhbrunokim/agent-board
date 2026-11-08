@@ -1,5 +1,6 @@
 mod access;
 mod task_context;
+mod vault_feed;
 pub use access::Role;
 mod projections;
 mod sources;
@@ -335,6 +336,7 @@ pub fn router(s: Store) -> Router {
         .merge(workflows::routes())
         .merge(sources::routes())
         .merge(task_context::routes())
+        .merge(vault_feed::routes())
         .merge(projections::routes())
         .merge(access::routes())
         .route_layer(middleware::from_fn_with_state(s.clone(), auth))

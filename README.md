@@ -108,11 +108,12 @@ agent-board request --path '/api/v1/context?task_id=TASK_ID&max_chars=8000'
 agent-board export --vault /absolute/path/to/vault
 ```
 
-`AgentBoard/<project-id>/`에 Markdown 문서가 생성됩니다. 반복 실행하면 변경된 파일을 갱신하며, 사용자가 수정한 관리 파일은 덮어쓰지 않고 충돌을 알립니다. 개인 메모는 관리 폴더 밖에 작성하세요.
+`AgentBoard/<project-id>/`에 Markdown 문서가 생성됩니다. 최초 조회 후 반복 실행하면 이벤트 변경분을 받아 관련 파일을 갱신하며, 사용자가 수정한 관리 파일은 덮어쓰지 않고 충돌을 알립니다. 개인 메모는 관리 폴더 밖에 작성하세요.
 
 ## 문서
 
 - [설치와 업그레이드](docs/installation.md)
+- [Obsidian 동기화](docs/vault-sync.md)
 - [작업별 맥락 조회](docs/task-context.md)
 - [지식 출처와 근거 연결](docs/sources.md)
 - [토큰과 권한 관리](docs/access.md)

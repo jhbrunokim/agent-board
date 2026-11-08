@@ -1,6 +1,7 @@
 use agent_board::{Store, router};
 use clap::{Parser, Subcommand};
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[command(subcommand)]
     command: Command,

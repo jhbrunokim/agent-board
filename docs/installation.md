@@ -1,8 +1,28 @@
-# 간단 설치
+# 설치와 업그레이드
 
-## 현재 지원: 소스 설치
+## GitHub 릴리스로 설치
 
-비공개 저장소 접근 권한과 GitHub CLI 로그인, Rust stable, 플랫폼 C 빌드 도구가 필요합니다.
+GitHub CLI에 로그인하고 비공개 저장소 접근 권한을 확인합니다. 쓰기 가능한 디렉터리에서 설치 파일을 받습니다.
+
+```sh
+gh release download --repo jhbrunokim/agent-board --pattern install.sh
+bash install.sh --release latest
+```
+
+지원 빌드는 Linux x86-64·ARM64와 macOS Apple Silicon·Intel입니다. Linux는 Ubuntu 22.04, macOS는 macOS 15에서 빌드하고 실행을 확인합니다. 다른 배포판이나 OS 버전에서 문제가 있으면 소스 설치를 사용하세요.
+
+설치기는 GitHub CLI로 플랫폼에 맞는 실행 파일과 SHA-256 목록을 받고, 체크섬과 버전 태그를 확인한 뒤 설치합니다. Bash와 `sha256sum` 또는 `shasum`이 필요합니다. 기본 위치는 `~/.local/bin/agent-board`이며 `--prefix /absolute/path`로 지정할 수 있습니다.
+
+특정 버전을 쓰려면 다운로드와 설치에 같은 태그를 지정합니다.
+
+```sh
+gh release download v0.1.0 --repo jhbrunokim/agent-board --pattern install.sh
+bash install.sh --release v0.1.0
+```
+
+## 소스에서 설치
+
+Rust stable과 플랫폼의 C 빌드 도구가 필요합니다.
 
 ```sh
 gh repo clone jhbrunokim/agent-board
@@ -10,25 +30,20 @@ cd agent-board
 ./scripts/install.sh
 ```
 
-설치 위치는 기본 `~/.local/bin/agent-board`입니다. `./scripts/install.sh --prefix /absolute/path`로 변경합니다. 스크립트는 release 빌드 후 실행 파일만 교체하며 DB·토큰·서비스를 자동 생성하거나 변경하지 않습니다. PATH에 설치 디렉터리를 추가한 뒤 `agent-board --help`를 실행합니다. 같은 절차를 다시 실행하면 바이너리를 업그레이드합니다. 기존 DB 백업과 `agent-board migrate`는 별도 단계입니다.
+신뢰할 수 있는 사전 빌드 파일을 이미 받았다면 `./scripts/install.sh --binary /absolute/path/agent-board`를 사용합니다.
 
-이미 빌드된 실행 파일은 `./scripts/install.sh --binary /absolute/path/agent-board`로 설치할 수 있습니다. 설치 파일은 해당 OS/CPU에 맞는 신뢰된 파일을 사용합니다. 아직 공식 prebuilt release는 발행하지 않았습니다.
+## 서버 업그레이드
 
-## 목표: Rust 없이 설치
+서비스를 중단하고 DB를 백업한 뒤 새 바이너리를 설치합니다. 기존 DB 접속 설정으로 `agent-board migrate`를 실행하고 서비스를 다시 시작합니다. [Linux 운영 안내](../deploy/README.md)를 참고하세요.
 
-버전 태그 기반 GitHub Release에서 Linux x86_64/ARM64, macOS Apple Silicon/Intel 실행 파일과 SHA-256 manifest를 제공합니다. 다운로드 설치기는 OS/CPU를 판별하고 버전 및 checksum을 검증한 뒤 같은 설치 로직을 사용하게 합니다. Linux glibc 요구 버전 또는 musl 지원을 release마다 명시하고 실제 대상에서 시험합니다. private release는 gh 인증으로 다운로드하며 token을 명령줄/로그에 출력하지 않습니다. 검증 없는 curl-pipe-shell을 필수 설치 방식으로 삼지 않습니다.
+CLI 설치와 서버 배치는 별도입니다. 현재 간편 설치 경로는 비공개 GitHub 릴리스와 로그인한 GitHub CLI를 사용합니다. Homebrew tap을 배포하려면 비공개 바이너리를 받는 인증 경로를 별도로 마련해야 합니다.
 
-이 단계는 release 빌드/실기기 검증 후 제공합니다. 현재 내려받을 수 있는 URL이나 지원 완료 플랫폼을 가정하지 않습니다.
+## 릴리스 운영
 
-## Homebrew 방향
-
-전용 `jhbrunokim/homebrew-tap`에 formula를 두고 동일한 버전별 release archive/checksum을 사용합니다. 목표 명령은 다음과 같습니다.
+Cargo.toml과 Cargo.lock에서 버전을 준비하고 main의 계약 테스트를 확인합니다. 아래 워크플로는 네 플랫폼의 빌드, 버전 확인, 설치, SQLite 스키마 생성이 모두 성공한 뒤 해당 커밋의 릴리스를 생성합니다.
 
 ```sh
-brew tap jhbrunokim/tap
-brew install agent-board
+gh workflow run release.yml --ref main -f tag=v0.1.0 -f publish=true
 ```
 
-아직 tap/formula를 발행하지 않았으므로 위 명령은 현재 설치 경로가 아닙니다. private tap과 private release의 인증이 일반 Homebrew 다운로드에 자동 적용된다고 가정하지 않습니다. 배포 시 공개 바이너리/tap을 별도로 제공할지, 인증된 전용 설치기를 유지할지 결정합니다. 소스 저장소 공개는 설치 편의를 위해 자동 변경하지 않습니다.
-
-Linux 서버의 systemd 서비스 등록은 `deploy/` 예시로 분리하고, 서비스 계정·데이터 위치·접근 범위를 확인한 뒤 실행합니다. CLI 설치와 운영 서비스 등록을 구분합니다.
+`publish=false`는 빌드와 검증만 실행합니다. 실패한 실행에서 초안이 남았다면 태그, 커밋과 업로드된 자산을 확인한 뒤 복구하세요.
